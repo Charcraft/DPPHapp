@@ -1,0 +1,11 @@
+# ============================================================
+#  requirements.txt — Dependencias del proyecto StatLab
+# ============================================================
+
+streamlit>=1.35.0
+pandas>=2.0.0
+numpy>=1.26.0
+scipy>=1.12.0
+plotly>=5.20.0
+google-generativeai>=0.5.0
+python-dotenv>=1.0.0
