@@ -23,6 +23,7 @@ from modules.data_loader import (
     generate_synthetic_data,
     get_numeric_columns,
     load_csv,
+    load_local_csv,
 )
 from modules.gemini_helper import build_z_test_prompt, get_gemini_explanation
 from modules.stats_tests import (
@@ -254,6 +255,13 @@ def render_sidebar() -> tuple:
     """
     Renderiza el panel lateral de carga de datos.
     Retorna (df, selected_column, stats) o (None, None, None) si no hay datos.
+
+    Gestión de Session State
+    ────────────────────────
+    El DataFrame siempre se persiste en st.session_state["df"] para que
+    no desaparezca al cambiar entre las pestañas de la app.
+    La clave "data_source_loaded" registra qué fuente está activa y
+    permite detectar cambios de fuente para limpiar el estado anterior.
     """
     with st.sidebar:
         st.markdown(
@@ -267,9 +275,17 @@ def render_sidebar() -> tuple:
         st.markdown("**Fuente de datos**")
         data_source = st.radio(
             "Selecciona origen",
-            ["Datos Sintéticos", "Subir CSV"],
+            ["Datos Sintéticos", "Subir CSV", "Dataset de Ejemplo"],
             label_visibility="collapsed",
         )
+
+        # Detectar cambio de fuente y limpiar estado previo para evitar
+        # que datos de una fuente anterior contaminen la nueva selección.
+        if st.session_state.get("data_source_loaded") != data_source:
+            st.session_state.pop("df", None)
+            st.session_state.pop("z_result", None)
+            st.session_state.pop("z_stats", None)
+            st.session_state["data_source_loaded"] = data_source
 
         df = None
 
@@ -288,27 +304,52 @@ def render_sidebar() -> tuple:
                 df = generate_synthetic_data(preset, n_samples, int(seed))
                 st.session_state["df"] = df
                 st.success(f"✓ {n_samples} observaciones generadas")
+                st.rerun()
 
-            # Usar datos previos si ya existen
-            if "df" not in st.session_state and df is None:
+            # Carga inicial silenciosa si no hay datos en sesión todavía
+            if "df" not in st.session_state:
                 df = generate_synthetic_data(preset, n_samples, int(seed))
                 st.session_state["df"] = df
 
-        # ── Opción 2: CSV ───────────────────────────────────────────────
-        else:
+        # ── Opción 2: CSV subido por el usuario ─────────────────────────
+        elif data_source == "Subir CSV":
             uploaded = st.file_uploader("Archivo CSV", type=["csv"])
-            if uploaded:
+            if uploaded is not None:
+                # Siempre re-leer cuando hay un archivo presente.
+                # getvalue() (implementado en load_csv) es idempotente
+                # y seguro ante múltiples re-runs de Streamlit.
                 df = load_csv(uploaded)
                 if df is not None:
                     st.session_state["df"] = df
                     st.success(f"✓ {len(df)} filas cargadas")
 
-        # ── Recuperar de sesión si no hay df nuevo ──────────────────────
+            elif "df" not in st.session_state:
+                st.info("Sube un archivo CSV para continuar.")
+
+        # ── Opción 3: Dataset de Ejemplo ────────────────────────────────
+        else:
+            EXAMPLE_PATH = "data/ejemplo.csv"
+            st.caption(
+                "Carga automáticamente el dataset de ejemplo incluido "
+                f"en `{EXAMPLE_PATH}`."
+            )
+
+            if st.button("Cargar Ejemplo", use_container_width=True):
+                df = load_local_csv(EXAMPLE_PATH)
+                if df is not None:
+                    st.session_state["df"] = df
+                    st.success(f"✓ Ejemplo cargado — {len(df)} filas")
+                    st.rerun()
+
+            # Si ya se cargó antes en esta sesión, no hace falta volver a leer
+            if "df" not in st.session_state:
+                st.info(f"Pulsa **Cargar Ejemplo** para usar `{EXAMPLE_PATH}`.")
+
+        # ── Recuperar DataFrame de sesión (persiste entre tabs) ─────────
         if df is None:
             df = st.session_state.get("df")
 
         if df is None:
-            st.info("Genera o sube datos para comenzar.")
             return None, None, None
 
         # ── Selección de columna ────────────────────────────────────────

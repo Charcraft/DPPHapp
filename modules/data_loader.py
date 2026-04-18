@@ -3,9 +3,10 @@ modules/data_loader.py
 ──────────────────────
 Responsabilidad única: proporcionar datos al resto de la aplicación.
 
-Dos fuentes posibles:
-  1. Archivo CSV subido por el usuario.
+Tres fuentes posibles:
+  1. Archivo CSV subido por el usuario (st.file_uploader).
   2. Datos sintéticos generados con NumPy (útil para demos).
+  3. CSV local en disco (dataset de ejemplo incluido en el proyecto).
 """
 
 import io
@@ -95,17 +96,50 @@ def load_csv(uploaded_file) -> pd.DataFrame | None:
     """
     Lee un archivo CSV subido a través de st.file_uploader.
 
+    Usa getvalue() en lugar de read() para evitar el error
+    "I/O operation on closed file" que ocurre cuando Streamlit
+    reutiliza el buffer entre re-runs del script.
+
     Retorna
     -------
     pd.DataFrame si la lectura es exitosa, None en caso de error.
     """
     try:
-        # Soporta tanto texto como bytes
-        content = uploaded_file.read()
-        df = pd.read_csv(io.BytesIO(content))
+        # getvalue() extrae todos los bytes del buffer sin avanzar
+        # el puntero interno, lo que lo hace seguro ante re-runs.
+        raw_bytes = uploaded_file.getvalue()
+        df = pd.read_csv(io.BytesIO(raw_bytes))
         return df
     except Exception as exc:
         st.error(f"❌ Error al leer el CSV: {exc}")
+        return None
+
+
+def load_local_csv(file_path: str) -> pd.DataFrame | None:
+    """
+    Carga un archivo CSV desde una ruta local en disco.
+    Diseñado para el dataset de ejemplo incluido en data/ejemplo.csv.
+
+    Parámetros
+    ----------
+    file_path : str
+        Ruta relativa o absoluta al archivo CSV (ej. "data/ejemplo.csv").
+
+    Retorna
+    -------
+    pd.DataFrame si la lectura es exitosa, None en caso de error.
+    """
+    try:
+        df = pd.read_csv(file_path)
+        return df
+    except FileNotFoundError:
+        st.error(
+            f"❌ No se encontró el archivo de ejemplo en `{file_path}`. "
+            "Asegúrate de que existe la carpeta `data/` con el archivo `ejemplo.csv`."
+        )
+        return None
+    except Exception as exc:
+        st.error(f"❌ Error al leer el CSV de ejemplo: {exc}")
         return None
 
 
