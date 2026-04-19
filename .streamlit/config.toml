@@ -1,0 +1,14 @@
+[theme]
+# Color de acento principal (botones, sliders, etc.)
+primaryColor = "#000000"
+
+# Color de fondo principal de la aplicación
+backgroundColor = "#7c7c7c"
+
+# Color de fondo secundario (panel lateral, cajas, etc.)
+secondaryBackgroundColor = "#0D0D0D"
+
+# Color del texto principal
+textColor = "#000000"
+
+font = "sans serif"
